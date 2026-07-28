@@ -146,10 +146,21 @@ separate reconnect-loop symptom, which is not what AC4 is testing.)
 
 ## AC5 — Concealed/transient clipboard items (password managers) are NOT propagated
 
-This requires a **real password manager** on at least one machine
-(KeePassXC, Bitwarden, or 1Password — any one that marks clipboard content
-per the nspasteboard.org convention on macOS, or sets
-`x-kde-passwordManagerHint` on Linux; all three do).
+This requires a password manager that actually **marks** its clipboard
+copies. Field-verified 2026-07-28 on macOS: use **KeePassXC** or the
+**1Password 8 native app**. The following do NOT mark and WILL sync like
+plain text — do not use them for this test, and know they are not protected
+in daily use either:
+
+- **Apple's Passwords app** — verified on the real pasteboard: it puts only
+  `public.utf8-plain-text`, no concealed/transient marker of any kind.
+- **Any browser-extension copy** (1Password/Bitwarden/etc. inside
+  Chrome/Safari) — the copy goes through the browser clipboard API,
+  markers never attach.
+- **iPhone → Mac via Apple Universal Clipboard** — markers don't survive
+  the Continuity hop, and the item then relays on to Linux.
+
+On Linux, KeePassXC sets `x-kde-passwordManagerHint` and is detected.
 
 1. On **Ubuntu** (or Mac — pick whichever has a password manager
    installed), open your password manager and **copy a password field**

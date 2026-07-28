@@ -53,6 +53,14 @@ see `macos/DATA.template` / `linux/DATA.template`).
   LAN without adding a reverse proxy/VPN in front of it.
 - Clients must talk to the server's **LAN IP**, never `localhost` — see
   `server/README.md` for the known upstream bug this works around.
+- **Secrets caveat (read this):** the clients are patched to skip clipboard
+  items *marked* sensitive by their source app (`org.nspasteboard.ConcealedType`
+  on macOS, `x-kde-passwordManagerHint` on Linux — e.g. KeePassXC, 1Password 8
+  native app). Apps that do **not** mark — verified: **Apple's Passwords app**,
+  all **browser-extension** password copies, and **iPhone→Mac Universal
+  Clipboard** hops — produce plain text that syncs like any other copy.
+  There is no reliable content-based detection for unmarked secrets. When in
+  doubt: pause sync from the tray first. Details: `docs/troubleshooting.md`.
 
 ## Quickstart
 
