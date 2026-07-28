@@ -5,6 +5,7 @@ import threading
 import time
 
 from core.constants import *
+from clipboard.sensitive import should_skip_mime_targets
 
 _callback_update = None
 _clipboard_thread = None
@@ -16,24 +17,52 @@ _run_poll = threading.Event()
 _wl_watch_proc = None
 
 
+def _gtk_clipboard_targets(clipboard):
+    """Best-effort read of the GTK clipboard's advertised targets, via
+    Gtk.Clipboard.wait_for_targets() (gtk_clipboard_wait_for_targets). Returns
+    None on any failure so callers degrade to current upstream behavior
+    (send) instead of crashing the monitor."""
+    try:
+        success, targets = clipboard.wait_for_targets()
+        if not success or not targets:
+            return []
+        return [t.name() for t in targets]
+    except Exception as e:
+        logging.warning(
+            f"Unable to inspect GTK clipboard targets, assuming non-sensitive: {e}"
+        )
+        return None
+
+
 def _on_clipboard_changed(
     clipboard, event=None, enable_image_monitoring=False, enable_file_monitoring=False
 ):
     global _block_image_once
+
+    # Password-manager-owned content (e.g. KeePassXC sets
+    # x-kde-passwordManagerHint) must never be synced. Checked once per
+    # change event -- it's a clipboard-wide marker, not per-content-type.
+    skip = should_skip_mime_targets(_gtk_clipboard_targets(clipboard))
 
     # Files
     if enable_file_monitoring:
         uris = clipboard.wait_for_uris()
         if uris is not None and len(uris) > 0:
             if _callback_update:
-                _callback_update("files", uris)
+                if skip:
+                    logging.debug("skipped concealed/transient clipboard item")
+                else:
+                    _callback_update("files", uris)
             return
 
     # Text
     text = clipboard.wait_for_text()
     if text is not None and len(text) > 0:
         if _callback_update:
-            _callback_update("text", text)
+            if skip:
+                logging.debug("skipped concealed/transient clipboard item")
+            else:
+                _callback_update("text", text)
         return
 
     # Image
@@ -44,6 +73,9 @@ def _on_clipboard_changed(
                 _block_image_once = False
                 return
             if _callback_update:
+                if skip:
+                    logging.debug("skipped concealed/transient clipboard item")
+                    return
                 success, buffer = pixbuf.save_to_bufferv("png")
                 if success:
                     _callback_update("image", bytes(buffer))
@@ -92,6 +124,10 @@ def _monitor_x_wl_clipboard(
         mime_list = mime_list.replace("\r\n", "\n").replace("\r", "\n").split("\n")
         mime_list = [m.strip() for m in mime_list if len(m.strip()) > 0]
         type_ = convert_mime_to_generic_type(mime_list)
+        # Password-manager-owned content (e.g. KeePassXC's
+        # x-kde-passwordManagerHint) must never be synced. mime_list is
+        # already enumerated above, before any content is read.
+        skip = should_skip_mime_targets(mime_list)
 
         # Text
         if type_ == "text":
@@ -106,7 +142,10 @@ def _monitor_x_wl_clipboard(
                 if len(text) > 0 and text != previous_clipboard:
                     previous_clipboard = text
                     if _callback_update:
-                        _callback_update("text", text)
+                        if skip:
+                            logging.debug("skipped concealed/transient clipboard item")
+                        else:
+                            _callback_update("text", text)
             else:
                 error_msg = f"Failed to retrieve text content from clipboard. {text}"
                 if error_msg != last_error:
@@ -133,10 +172,13 @@ def _monitor_x_wl_clipboard(
             if success:
                 if image != previous_clipboard:
                     previous_clipboard = image
-                    if _callback_update and not _block_image_once:
-                        _callback_update("image", image)
-                    else:
+                    if _block_image_once:
                         _block_image_once = False
+                    elif _callback_update:
+                        if skip:
+                            logging.debug("skipped concealed/transient clipboard item")
+                        else:
+                            _callback_update("image", image)
             else:
                 error_msg = f"Failed to retrieve image content from clipboard. {image}"
                 if error_msg != last_error:
@@ -169,7 +211,10 @@ def _monitor_x_wl_clipboard(
                 if files != previous_clipboard:
                     previous_clipboard = files
                     if _callback_update:
-                        _callback_update("files", files)
+                        if skip:
+                            logging.debug("skipped concealed/transient clipboard item")
+                        else:
+                            _callback_update("files", files)
             else:
                 error_msg = f"Failed to retrieve files content from clipboard. {files}"
                 if error_msg != last_error:
@@ -237,6 +282,10 @@ def _monitor_wl_watch(enable_image_monitoring=False, enable_file_monitoring=Fals
             mime_list = mime_list.replace("\r\n", "\n").replace("\r", "\n").split("\n")
             mime_list = [m.strip() for m in mime_list if len(m.strip()) > 0]
             type_ = convert_mime_to_generic_type(mime_list)
+            # Password-manager-owned content (e.g. KeePassXC's
+            # x-kde-passwordManagerHint) must never be synced. mime_list is
+            # already enumerated above, before any content is read.
+            skip = should_skip_mime_targets(mime_list)
 
             # Text
             if type_ == "text":
@@ -246,7 +295,10 @@ def _monitor_wl_watch(enable_image_monitoring=False, enable_file_monitoring=Fals
                     if len(text) > 0 and text != previous_clipboard:
                         previous_clipboard = text
                         if _callback_update:
-                            _callback_update("text", text)
+                            if skip:
+                                logging.debug("skipped concealed/transient clipboard item")
+                            else:
+                                _callback_update("text", text)
                 else:
                     error_msg = (
                         f"Failed to retrieve text content from clipboard. {text}"
@@ -265,10 +317,13 @@ def _monitor_wl_watch(enable_image_monitoring=False, enable_file_monitoring=Fals
                 if success:
                     if image != previous_clipboard:
                         previous_clipboard = image
-                        if _callback_update and not _block_image_once:
-                            _callback_update("image", image)
-                        else:
+                        if _block_image_once:
                             _block_image_once = False
+                        elif _callback_update:
+                            if skip:
+                                logging.debug("skipped concealed/transient clipboard item")
+                            else:
+                                _callback_update("image", image)
                 else:
                     error_msg = (
                         f"Failed to retrieve image content from clipboard. {image}"
@@ -295,7 +350,10 @@ def _monitor_wl_watch(enable_image_monitoring=False, enable_file_monitoring=Fals
                     if files != previous_clipboard:
                         previous_clipboard = files
                         if _callback_update:
-                            _callback_update("files", files)
+                            if skip:
+                                logging.debug("skipped concealed/transient clipboard item")
+                            else:
+                                _callback_update("files", files)
                 else:
                     error_msg = (
                         f"Failed to retrieve files content from clipboard. {files}"
