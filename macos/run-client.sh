@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 VENDOR_DIR="${REPO_ROOT}/vendor/ClipCascade_Desktop"
-REQUIREMENTS="${VENDOR_DIR}/requirements.txt"
+REQUIREMENTS="${VENDOR_DIR}/src/requirements_mac.txt"
 MAIN_PY="${VENDOR_DIR}/src/main.py"
 VENV_DIR="${REPO_ROOT}/.venv-mac"
 

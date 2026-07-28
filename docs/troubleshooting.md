@@ -92,29 +92,12 @@ your own debugging, temporarily change `LOG_LEVEL` to `logging.DEBUG` in
 (this is a vendor/-territory source edit, not something these docs can do
 for you).
 
-## Setup-time blocker: `requirements.txt` not found
+## Setup fails with `ERROR: expected requirements file not found`
 
-`macos/run-client.sh` and `linux/setup.sh` both look for a file named
-`requirements.txt` directly under `vendor/ClipCascade_Desktop/`. This
-vendored snapshot (tag `3.2.0`, see `vendor/VERSION`) does not ship a file
-by that name or in that location — only per-platform files one directory
-deeper, under `vendor/ClipCascade_Desktop/src/`:
-`requirements_mac.txt`, `requirements_linux.txt`,
-`requirements_linux_cli.txt`, `requirements_linux_gui.txt`,
-`requirements_win.txt`.
-
-If either script exits with `ERROR: expected requirements file not found`,
-copy the right one into the path the script expects, then re-run it:
-
-```bash
-# macOS:
-cp vendor/ClipCascade_Desktop/src/requirements_mac.txt \
-   vendor/ClipCascade_Desktop/requirements.txt
-# Ubuntu (GUI/tray mode, matching linux/clipcascade-client.service's --gui true):
-cp vendor/ClipCascade_Desktop/src/requirements_linux_gui.txt \
-   vendor/ClipCascade_Desktop/requirements.txt
-```
-
-This is reported here for visibility (this doc is in `docs/**`); fixing
-`macos/run-client.sh` / `linux/setup.sh` themselves is out of this
-specialist's territory.
+The vendored snapshot (tag `3.2.0`, see `vendor/VERSION`) ships per-platform
+requirements files under `vendor/ClipCascade_Desktop/src/`
+(`requirements_mac.txt`, `requirements_linux.txt`, etc.), not a single
+`requirements.txt`. `macos/run-client.sh` uses `src/requirements_mac.txt` and
+`linux/setup.sh` uses `src/requirements_linux.txt`. If you see this error,
+your checkout predates that fix or the vendored tree is incomplete — run
+`git pull` and confirm the file exists at the path printed in the error.

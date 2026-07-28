@@ -122,26 +122,12 @@ gnome-extensions enable ubuntu-appindicators@ubuntu.com   # or use the "Extensio
 
 Log out and back in once for the extension to take effect.
 
-**Known blocker — requirements file path (report only, not fixed by this
-doc; this doc is `docs/**` territory, `linux/setup.sh` is not):**
-`linux/setup.sh` looks for `vendor/ClipCascade_Desktop/requirements.txt`,
-but this vendored snapshot only ships
-`vendor/ClipCascade_Desktop/src/requirements_linux.txt` and
-`vendor/ClipCascade_Desktop/src/requirements_linux_gui.txt` — no bare
-`requirements.txt`, and not even in the same directory the script checks.
-If `linux/setup.sh` exits with `ERROR: expected requirements file not
-found`, work around it manually before re-running:
-
-```bash
-cp vendor/ClipCascade_Desktop/src/requirements_linux_gui.txt \
-   vendor/ClipCascade_Desktop/requirements.txt
-./linux/setup.sh
-```
-
-(`requirements_linux_gui.txt` matches this setup — GUI tray mode via
-`--gui true`, see B3. Use `requirements_linux_cli.txt` instead only if you
-intend to run the CLI-only client, which this project's autostart unit does
-not.)
+`linux/setup.sh` installs deps from
+`vendor/ClipCascade_Desktop/src/requirements_linux.txt` (superset covering
+the GUI tray mode this setup uses) into a venv created with
+`--system-site-packages` so the apt-installed PyGObject (`gi`) is visible to
+the GTK clipboard path and tray backend. If it exits with `ERROR: expected
+requirements file not found`, see `docs/troubleshooting.md`.
 
 ### B2. Configure the client (DATA file)
 

@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 VENDOR_DIR="${REPO_ROOT}/vendor/ClipCascade_Desktop"
-REQUIREMENTS="${VENDOR_DIR}/requirements.txt"
+REQUIREMENTS="${VENDOR_DIR}/src/requirements_linux.txt"
 VENV_DIR="${REPO_ROOT}/.venv-linux"
 
 echo "Installing system packages (sudo required) ..."
@@ -47,7 +47,10 @@ fi
 
 if [[ ! -d "${VENV_DIR}" ]]; then
   echo "Creating venv at ${VENV_DIR} ..."
-  python3 -m venv "${VENV_DIR}"
+  # --system-site-packages: PyGObject (gi) is apt-installed, not pip-installable
+  # from the vendored requirements; the GTK clipboard path and the AppIndicator
+  # tray backend need it visible inside the venv.
+  python3 -m venv --system-site-packages "${VENV_DIR}"
 fi
 
 # shellcheck disable=SC1091

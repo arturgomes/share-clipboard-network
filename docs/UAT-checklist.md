@@ -281,10 +281,8 @@ themselves plus this checklist. To validate it directly:
 1. On a clean checkout of this repo (or a fresh clone), follow
    `docs/setup-ubuntu.md` Part A and Part B end to end on the Ubuntu
    machine, from "Install Docker" through "Verify", noting every step that
-   required a manual workaround not already called out in that doc
-   (compare against the "Known blocker" callouts already documented there —
-   e.g. the `requirements.txt` path issue in
-   `docs/troubleshooting.md`).
+   required a manual workaround not already called out in that doc or in
+   `docs/troubleshooting.md`.
 2. On a clean checkout on the Mac, follow `docs/setup-macos.md` end to
    end.
 3. Run AC1–AC7 above against the result.

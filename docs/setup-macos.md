@@ -36,20 +36,10 @@ this client too (`enable_image_sharing` / `enable_file_sharing` in
 3. Installs the client's Python deps into it.
 4. Runs `python3 vendor/ClipCascade_Desktop/src/main.py`.
 
-**Known blocker — requirements file path (report only, not fixed by this
-doc; this doc is `docs/**` territory, `macos/run-client.sh` is not):**
-the script looks for `vendor/ClipCascade_Desktop/requirements.txt`, but this
-vendored snapshot only ships
-`vendor/ClipCascade_Desktop/src/requirements_mac.txt` — no bare
-`requirements.txt`, and not even in the directory the script checks. If
-`macos/run-client.sh` exits with `ERROR: expected requirements file not
-found`, work around it manually before re-running:
-
-```bash
-cp vendor/ClipCascade_Desktop/src/requirements_mac.txt \
-   vendor/ClipCascade_Desktop/requirements.txt
-./macos/run-client.sh
-```
+The script installs deps from
+`vendor/ClipCascade_Desktop/src/requirements_mac.txt`. If it exits with
+`ERROR: expected requirements file not found`, see
+`docs/troubleshooting.md`.
 
 The first time you run this, expect a **login window** to pop up (see
 step 4 below) rather than a silent background start — that's expected for
