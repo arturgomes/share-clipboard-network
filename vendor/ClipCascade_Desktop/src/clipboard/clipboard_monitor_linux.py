@@ -16,21 +16,41 @@ _is_gdk_running = False
 _run_poll = threading.Event()
 _wl_watch_proc = None
 
+_inspection_unavailable_warned = False
+
+
+def _warn_inspection_unavailable_once(detail=""):
+    """Log the fail-closed warning (AC5) exactly once per process lifetime,
+    across all Linux clipboard-monitoring code paths in this module (GTK,
+    xclip/wl-paste polling, wl-paste --watch) -- otherwise a persistent
+    inspection failure would log every poll tick forever."""
+    global _inspection_unavailable_warned
+    if not _inspection_unavailable_warned:
+        _inspection_unavailable_warned = True
+        suffix = f" ({detail})" if detail else ""
+        logging.warning(
+            "clipboard type inspection unavailable -- failing closed, "
+            f"items will NOT be synced until this is resolved{suffix}"
+        )
+
 
 def _gtk_clipboard_targets(clipboard):
     """Best-effort read of the GTK clipboard's advertised targets, via
-    Gtk.Clipboard.wait_for_targets() (gtk_clipboard_wait_for_targets). Returns
-    None on any failure so callers degrade to current upstream behavior
-    (send) instead of crashing the monitor."""
+    Gtk.Clipboard.wait_for_targets() (gtk_clipboard_wait_for_targets).
+
+    Returns None on any failure. Callers MUST treat None as "could not
+    inspect" and fail CLOSED (should_skip_mime_targets(None) -> True, AC5)
+    -- never as "assume non-sensitive, send it". A persistent failure here
+    means the monitor stops sending anything at all until resolved; that is
+    the intended fail-safe behavior, not a bug.
+    """
     try:
         success, targets = clipboard.wait_for_targets()
         if not success or not targets:
             return []
         return [t.name() for t in targets]
     except Exception as e:
-        logging.warning(
-            f"Unable to inspect GTK clipboard targets, assuming non-sensitive: {e}"
-        )
+        _warn_inspection_unavailable_once(str(e))
         return None
 
 
@@ -40,16 +60,23 @@ def _on_clipboard_changed(
     global _block_image_once
 
     # Password-manager-owned content (e.g. KeePassXC sets
-    # x-kde-passwordManagerHint) must never be synced. Checked once per
-    # change event -- it's a clipboard-wide marker, not per-content-type.
-    skip = should_skip_mime_targets(_gtk_clipboard_targets(clipboard))
+    # x-kde-passwordManagerHint) must never be synced. This is the PRE-read
+    # check. Each branch below re-checks again AFTER its own content read
+    # and requires BOTH checks to be clean before calling _callback_update
+    # -- a single pre-read check is a TOCTOU gap: a sensitive item copied in
+    # the moment between this check and the actual wait_for_text/wait_for_
+    # uris/wait_for_image read would otherwise be sent using this stale
+    # clean verdict. should_skip_mime_targets(None) is True (AC5 fails
+    # CLOSED), so an inspection failure on either side skips.
+    skip_before = should_skip_mime_targets(_gtk_clipboard_targets(clipboard))
 
     # Files
     if enable_file_monitoring:
         uris = clipboard.wait_for_uris()
         if uris is not None and len(uris) > 0:
             if _callback_update:
-                if skip:
+                skip_after = should_skip_mime_targets(_gtk_clipboard_targets(clipboard))
+                if skip_before or skip_after:
                     logging.debug("skipped concealed/transient clipboard item")
                 else:
                     _callback_update("files", uris)
@@ -59,7 +86,8 @@ def _on_clipboard_changed(
     text = clipboard.wait_for_text()
     if text is not None and len(text) > 0:
         if _callback_update:
-            if skip:
+            skip_after = should_skip_mime_targets(_gtk_clipboard_targets(clipboard))
+            if skip_before or skip_after:
                 logging.debug("skipped concealed/transient clipboard item")
             else:
                 _callback_update("text", text)
@@ -73,7 +101,8 @@ def _on_clipboard_changed(
                 _block_image_once = False
                 return
             if _callback_update:
-                if skip:
+                skip_after = should_skip_mime_targets(_gtk_clipboard_targets(clipboard))
+                if skip_before or skip_after:
                     logging.debug("skipped concealed/transient clipboard item")
                     return
                 success, buffer = pixbuf.save_to_bufferv("png")
@@ -82,6 +111,31 @@ def _on_clipboard_changed(
                 else:
                     logging.error("Failed to convert image(pixbuf) to buffer")
                 return
+
+
+def _list_mime_targets(x_mode: bool):
+    """Best-effort read + parse of the clipboard's currently advertised
+    MIME/X targets (`xclip -t TARGETS` / `wl-paste -l`). Used both as the
+    per-tick PRE-read check and, called again, as the post-read re-check
+    (F1/TOCTOU) in _monitor_x_wl_clipboard and _monitor_wl_watch (the latter
+    always passes x_mode=False since it is wl-paste-only).
+
+    Returns None on failure. Callers MUST treat None as "could not inspect"
+    and fail CLOSED via should_skip_mime_targets(None) -> True (AC5) --
+    never as "assume non-sensitive, send it".
+    """
+    if x_mode:
+        success, raw = execute_command(
+            "xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"
+        )
+    else:
+        success, raw = execute_command("wl-paste", "-l")
+    if not success:
+        _warn_inspection_unavailable_once(raw if isinstance(raw, str) else str(raw))
+        return None
+    mime_list = raw.decode("utf-8")
+    mime_list = mime_list.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return [m.strip() for m in mime_list if len(m.strip()) > 0]
 
 
 def _monitor_x_wl_clipboard(
@@ -106,28 +160,23 @@ def _monitor_x_wl_clipboard(
         timeout = 3  # wl-clipboard seconds
 
     while _run_poll.is_set():
-        if x_mode:
-            success, mime_list = execute_command(
-                "xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"
-            )
-        else:
-            success, mime_list = execute_command("wl-paste", "-l")
-        if not success:
-            error_msg = f"Failed to retrieve MIME types: {mime_list}"
+        # PRE-read target check. See the post-read re-check after each
+        # content read below -- a single pre-read check here is a TOCTOU
+        # gap: a sensitive item copied between this check and the actual
+        # content read would otherwise be sent using this stale clean
+        # verdict. should_skip_mime_targets(None) is True (AC5 fails
+        # CLOSED), so a target-listing failure on either side skips.
+        mime_list = _list_mime_targets(x_mode)
+        if mime_list is None:
+            error_msg = "Failed to retrieve MIME types (clipboard type inspection unavailable)"
             if error_msg != last_error:
                 logging.error(error_msg)
                 last_error = error_msg
             time.sleep(timeout)
             continue
 
-        mime_list = mime_list.decode("utf-8")
-        mime_list = mime_list.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-        mime_list = [m.strip() for m in mime_list if len(m.strip()) > 0]
         type_ = convert_mime_to_generic_type(mime_list)
-        # Password-manager-owned content (e.g. KeePassXC's
-        # x-kde-passwordManagerHint) must never be synced. mime_list is
-        # already enumerated above, before any content is read.
-        skip = should_skip_mime_targets(mime_list)
+        skip_before = should_skip_mime_targets(mime_list)
 
         # Text
         if type_ == "text":
@@ -142,7 +191,10 @@ def _monitor_x_wl_clipboard(
                 if len(text) > 0 and text != previous_clipboard:
                     previous_clipboard = text
                     if _callback_update:
-                        if skip:
+                        skip_after = should_skip_mime_targets(
+                            _list_mime_targets(x_mode)
+                        )
+                        if skip_before or skip_after:
                             logging.debug("skipped concealed/transient clipboard item")
                         else:
                             _callback_update("text", text)
@@ -175,7 +227,10 @@ def _monitor_x_wl_clipboard(
                     if _block_image_once:
                         _block_image_once = False
                     elif _callback_update:
-                        if skip:
+                        skip_after = should_skip_mime_targets(
+                            _list_mime_targets(x_mode)
+                        )
+                        if skip_before or skip_after:
                             logging.debug("skipped concealed/transient clipboard item")
                         else:
                             _callback_update("image", image)
@@ -211,7 +266,10 @@ def _monitor_x_wl_clipboard(
                 if files != previous_clipboard:
                     previous_clipboard = files
                     if _callback_update:
-                        if skip:
+                        skip_after = should_skip_mime_targets(
+                            _list_mime_targets(x_mode)
+                        )
+                        if skip_before or skip_after:
                             logging.debug("skipped concealed/transient clipboard item")
                         else:
                             _callback_update("files", files)
@@ -270,22 +328,23 @@ def _monitor_wl_watch(enable_image_monitoring=False, enable_file_monitoring=Fals
             if not _run_poll.is_set():
                 break
 
-            success, mime_output = execute_command("wl-paste", "-l")
-            if not success:
-                error_msg = f"Failed to retrieve MIME types: {mime_output}"
+            # PRE-read target check. See the post-read re-check after each
+            # content read below -- a single pre-read check here is a
+            # TOCTOU gap: a sensitive item copied between this check and the
+            # actual content read would otherwise be sent using this stale
+            # clean verdict. should_skip_mime_targets(None) is True (AC5
+            # fails CLOSED), so a target-listing failure on either side
+            # skips.
+            mime_list = _list_mime_targets(x_mode=False)
+            if mime_list is None:
+                error_msg = "Failed to retrieve MIME types (clipboard type inspection unavailable)"
                 if error_msg != last_error:
                     logging.error(error_msg)
                     last_error = error_msg
                 continue
 
-            mime_list = mime_output.decode("utf-8")
-            mime_list = mime_list.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-            mime_list = [m.strip() for m in mime_list if len(m.strip()) > 0]
             type_ = convert_mime_to_generic_type(mime_list)
-            # Password-manager-owned content (e.g. KeePassXC's
-            # x-kde-passwordManagerHint) must never be synced. mime_list is
-            # already enumerated above, before any content is read.
-            skip = should_skip_mime_targets(mime_list)
+            skip_before = should_skip_mime_targets(mime_list)
 
             # Text
             if type_ == "text":
@@ -295,7 +354,10 @@ def _monitor_wl_watch(enable_image_monitoring=False, enable_file_monitoring=Fals
                     if len(text) > 0 and text != previous_clipboard:
                         previous_clipboard = text
                         if _callback_update:
-                            if skip:
+                            skip_after = should_skip_mime_targets(
+                                _list_mime_targets(x_mode=False)
+                            )
+                            if skip_before or skip_after:
                                 logging.debug("skipped concealed/transient clipboard item")
                             else:
                                 _callback_update("text", text)
@@ -320,7 +382,10 @@ def _monitor_wl_watch(enable_image_monitoring=False, enable_file_monitoring=Fals
                         if _block_image_once:
                             _block_image_once = False
                         elif _callback_update:
-                            if skip:
+                            skip_after = should_skip_mime_targets(
+                                _list_mime_targets(x_mode=False)
+                            )
+                            if skip_before or skip_after:
                                 logging.debug("skipped concealed/transient clipboard item")
                             else:
                                 _callback_update("image", image)
@@ -350,7 +415,10 @@ def _monitor_wl_watch(enable_image_monitoring=False, enable_file_monitoring=Fals
                     if files != previous_clipboard:
                         previous_clipboard = files
                         if _callback_update:
-                            if skip:
+                            skip_after = should_skip_mime_targets(
+                                _list_mime_targets(x_mode=False)
+                            )
+                            if skip_before or skip_after:
                                 logging.debug("skipped concealed/transient clipboard item")
                             else:
                                 _callback_update("files", files)

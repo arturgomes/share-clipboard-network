@@ -26,20 +26,42 @@ SENSITIVE_MIME_TARGETS = frozenset(
 
 
 def should_skip_pasteboard_types(types):
-    """Return True if `types` (the macOS general pasteboard's advertised
-    UTI types for the current clipboard contents) contains any nspasteboard.org
-    concealed/transient/auto-generated marker. Empty/None input means "unknown"
-    and never skips."""
+    """Return True if the current clipboard content must NOT be synced.
+
+    `types` is the macOS general pasteboard's advertised UTI types for the
+    current clipboard contents, or None if the caller could not inspect them
+    at all (AppKit unavailable, an exception, etc).
+
+    Fails CLOSED (AC5): `types is None` -- "could not inspect" -- returns
+    True (skip). This is deliberate: an unclassifiable item must never be
+    treated as safe-to-send. A successfully inspected but empty list ([])
+    means "inspected, nothing sensitive found" and returns False (send
+    normally). Any nspasteboard.org concealed/transient/auto-generated
+    marker present also returns True (skip).
+    """
+    if types is None:
+        return True
     if not types:
         return False
     return not CONCEALED_PASTEBOARD_TYPES.isdisjoint(types)
 
 
 def should_skip_mime_targets(targets):
-    """Return True if `targets` (the Linux clipboard's advertised MIME/X
-    targets for the current clipboard contents) contains a password-manager
-    hint such as KeePassXC's x-kde-passwordManagerHint. Empty/None input means
-    "unknown" and never skips."""
+    """Return True if the current clipboard content must NOT be synced.
+
+    `targets` is the Linux clipboard's advertised MIME/X targets for the
+    current clipboard contents, or None if the caller could not inspect them
+    at all (xclip/wl-paste/GTK failure, an exception, etc).
+
+    Fails CLOSED (AC5): `targets is None` -- "could not inspect" -- returns
+    True (skip). This is deliberate: an unclassifiable item must never be
+    treated as safe-to-send. A successfully inspected but empty list ([])
+    means "inspected, nothing sensitive found" and returns False (send
+    normally). A password-manager hint such as KeePassXC's
+    x-kde-passwordManagerHint present also returns True (skip).
+    """
+    if targets is None:
+        return True
     if not targets:
         return False
     return not SENSITIVE_MIME_TARGETS.isdisjoint(targets)

@@ -13,6 +13,7 @@ _first_run = False
 _block_image_once = False
 _pasteboard_lock = threading.Lock()
 _pb_writer = None
+_inspection_unavailable_warned = False
 
 
 def write_to_pasteboard(data, pb_type):
@@ -29,9 +30,14 @@ def _current_pasteboard_types():
     The `pasteboard` package (see requirements_mac.txt) does not expose a way
     to list types, so fall back to pyobjc/AppKit (already a transitive
     runtime dependency on macOS via pystray/gui.tray -- see gui/tray.py).
-    Returns None on any failure so callers degrade to current upstream
-    behavior (send) instead of crashing the monitor.
+
+    Returns None on any failure. Callers MUST treat None as "could not
+    inspect" and fail CLOSED (should_skip_pasteboard_types(None) -> True,
+    AC5) -- never as "assume non-concealed, send it". A persistent failure
+    here means the monitor stops sending anything at all until resolved;
+    that is the intended fail-safe behavior, not a bug.
     """
+    global _inspection_unavailable_warned
     try:
         from AppKit import NSPasteboard
 
@@ -40,7 +46,12 @@ def _current_pasteboard_types():
             return []
         return [str(t) for t in raw_types]
     except Exception as e:
-        logging.warning(f"Unable to inspect pasteboard types, assuming non-concealed: {e}")
+        if not _inspection_unavailable_warned:
+            _inspection_unavailable_warned = True
+            logging.warning(
+                "clipboard type inspection unavailable -- failing closed, "
+                f"items will NOT be synced until this is resolved ({e})"
+            )
         return None
 
 
@@ -60,9 +71,15 @@ def _runner(enable_image_monitoring=False, enable_file_monitoring=False):
 
             # Concealed/transient/auto-generated content (password managers, e.g.
             # 1Password/Bitwarden/KeePassXC per the nspasteboard.org convention)
-            # must never be synced. Checked once per poll -- it's a
-            # pasteboard-wide marker, not per-content-type.
-            _skip_concealed = should_skip_pasteboard_types(_current_pasteboard_types())
+            # must never be synced. This is the PRE-read check. Each branch
+            # below re-checks again AFTER its own content read and requires
+            # BOTH checks to be clean before calling _callback_update -- a
+            # single pre-read check is a TOCTOU gap: a sensitive item copied
+            # in the moment between this check and the actual get_contents/
+            # get_file_urls read would otherwise be sent using this stale
+            # clean verdict. should_skip_pasteboard_types(None) is True (AC5
+            # fails CLOSED), so an inspection failure on either side skips.
+            _skip_before = should_skip_pasteboard_types(_current_pasteboard_types())
 
             if enable_file_monitoring:
                 # Files
@@ -74,10 +91,16 @@ def _runner(enable_image_monitoring=False, enable_file_monitoring=False):
                     and len(clipboard_files) > 0
                 ):
                     if _callback_update and not _first_run:
-                        if _skip_concealed:
+                        # Set unconditionally (mutual-exclusion invariant with
+                        # text/image below) -- must not depend on whether this
+                        # item turns out to be skipped.
+                        files_processed = True
+                        _skip_after = should_skip_pasteboard_types(
+                            _current_pasteboard_types()
+                        )
+                        if _skip_before or _skip_after:
                             logging.debug("skipped concealed/transient clipboard item")
                         else:
-                            files_processed = True
                             _callback_update("files", clipboard_files)
 
             # Text
@@ -92,7 +115,8 @@ def _runner(enable_image_monitoring=False, enable_file_monitoring=False):
                 and len(clipboard_text) > 0
             ):
                 if _callback_update and not _first_run and not files_processed:
-                    if _skip_concealed:
+                    _skip_after = should_skip_pasteboard_types(_current_pasteboard_types())
+                    if _skip_before or _skip_after:
                         logging.debug("skipped concealed/transient clipboard item")
                     else:
                         _callback_update("text", clipboard_text)
@@ -111,10 +135,13 @@ def _runner(enable_image_monitoring=False, enable_file_monitoring=False):
                         image_processed = True
                         if _block_image_once:
                             _block_image_once = False
-                        elif _skip_concealed:
-                            logging.debug("skipped concealed/transient clipboard item")
                         else:
-                            if not files_processed:
+                            _skip_after = should_skip_pasteboard_types(
+                                _current_pasteboard_types()
+                            )
+                            if _skip_before or _skip_after:
+                                logging.debug("skipped concealed/transient clipboard item")
+                            elif not files_processed:
                                 _callback_update("image", clipboard_image_png)
 
                 # Image (TIFF)
@@ -130,10 +157,13 @@ def _runner(enable_image_monitoring=False, enable_file_monitoring=False):
                         image_processed = True
                         if _block_image_once:
                             _block_image_once = False
-                        elif _skip_concealed:
-                            logging.debug("skipped concealed/transient clipboard item")
                         else:
-                            if not files_processed:
+                            _skip_after = should_skip_pasteboard_types(
+                                _current_pasteboard_types()
+                            )
+                            if _skip_before or _skip_after:
+                                logging.debug("skipped concealed/transient clipboard item")
+                            elif not files_processed:
                                 _callback_update("image", clipboard_image_tiff)
 
             files_processed = False
