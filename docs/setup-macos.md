@@ -114,7 +114,8 @@ This:
    into `macos/com.clipcascade.client.plist` (launchd plists can't expand
    `~`/`$HOME`, hence the substitution — see comments in that file).
 2. Copies the result to `~/Library/LaunchAgents/com.clipcascade.client.plist`.
-3. Runs `launchctl load` so it starts now and on every future login
+3. Runs `launchctl bootstrap gui/$(id -u) …` (after a tolerant `bootout` of
+   any prior copy) so it starts now and on every future login
    (`RunAtLoad = true`) — no manual start needed after a reboot (AC4).
 
 `KeepAlive.SuccessfulExit = false` means launchd relaunches the client if it
