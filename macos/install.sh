@@ -30,9 +30,13 @@ echo "Installed ${DEST_PLIST}"
 echo "  ProgramArguments -> ${REPO_ROOT}/macos/run-client.sh"
 echo "  Logs             -> ${HOME}/Library/Logs/clipcascade.log"
 
-# Unload first in case a previous version is already loaded, then load fresh.
-launchctl unload "${DEST_PLIST}" >/dev/null 2>&1 || true
-launchctl load "${DEST_PLIST}"
+# Boot out first in case a previous version is already loaded, then
+# bootstrap fresh. `launchctl unload`/`load` are the deprecated legacy
+# subcommands; `bootout`/`bootstrap` against the gui/<uid> domain are the
+# modern replacement (matches docs/troubleshooting.md's `launchctl
+# kickstart -k gui/$(id -u)/...` guidance, which is also gui/<uid>-domain-based).
+launchctl bootout "gui/$(id -u)" "${DEST_PLIST}" >/dev/null 2>&1 || true
+launchctl bootstrap "gui/$(id -u)" "${DEST_PLIST}"
 
 echo "Loaded com.clipcascade.client via launchctl."
 echo "Check status with: launchctl list | grep com.clipcascade.client"
