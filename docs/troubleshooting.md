@@ -14,6 +14,7 @@ references are real paths in this repo (`vendor/ClipCascade_Desktop/src/...`,
 | Copy-to-paste latency feels >2s | Client fell back to the slower polling loop instead of the event-driven `wl-paste --watch` path, or `--polling` wasn't set | See "Latency / which clipboard loop is running" below |
 | Pasted text is garbled / not the original text at all (not a connection error — the paste "succeeds" but content is wrong) | `salt` and/or `hash_rounds` differ between `macos/DATA.template`-derived `DATA` and `linux/DATA.template`-derived `DATA` — each client derives its own E2E key locally, so a mismatch means neither can decrypt what the other encrypted | Open both `DATA` files side by side; make `salt` and `hash_rounds` byte-for-byte identical on both machines, then restart both clients |
 | Password-manager copy (KeePassXC/Bitwarden/1Password) still shows up on the other machine | See "Concealed/transient skip isn't visibly confirmable at default log level" below — the log line will not appear even when the skip *is* working | Verify **behaviorally**, not by log-grepping alone: confirm the secret does *not* arrive on the other machine (see `docs/UAT-checklist.md` AC5) |
+| **Nothing** syncs at all any more — not just password-manager copies, everything (plain text, files, images) stops arriving on the other machine | Clipboard type/target inspection itself is failing (AppKit/pyobjc broken on macOS, or `xclip`/`wl-paste`/GTK broken on Linux) — see "Fail-closed: what it means when inspection breaks" below | Check the log for `clipboard type inspection unavailable -- failing closed, items will NOT be synced until this is resolved`. Fix whatever broke inspection (reinstall `pyobjc-framework-Cocoa`/`gi`, confirm `xclip`/`wl-clipboard` are installed and on `PATH`), then restart the client |
 
 ## Latency / which clipboard loop is running
 
@@ -75,14 +76,21 @@ The only related line that *does* surface at the default `INFO` level is
 the failure-path warning:
 
 ```python
-logging.warning(f"Unable to inspect pasteboard types, assuming non-concealed: {e}")
+logging.warning(
+    "clipboard type inspection unavailable -- failing closed, "
+    f"items will NOT be synced until this is resolved ({e})"
+)
 ```
 
-(macOS side; Linux has an equivalent
-`"Unable to inspect GTK clipboard targets, assuming non-sensitive"`.) If you
-see **this** line, it means type/target inspection itself failed and the
-client fell back to *sending* the content — i.e. the opposite of a skip.
-Its absence is a good sign, but not proof of a skip on its own.
+(Same message text on both platforms; logged from
+`_current_pasteboard_types()` on macOS and from `_gtk_clipboard_targets()`/
+`_list_mime_targets()` on Linux.) If you see **this** line, it means type/
+target inspection itself failed — and, per AC5, the client **fails
+CLOSED**: it stops sending *everything* (not just password-manager copies)
+until inspection is working again. This is the opposite of the old
+fail-open behavior; an unclassifiable clipboard item is never treated as
+safe-to-send. See "Fail-closed: what it means when inspection breaks"
+below for the full explanation and the symptom this produces.
 
 **Bottom line:** verify AC5 behaviorally (does the secret arrive on the
 other machine or not — see `docs/UAT-checklist.md` AC5), not by grepping
@@ -91,6 +99,35 @@ your own debugging, temporarily change `LOG_LEVEL` to `logging.DEBUG` in
 `vendor/ClipCascade_Desktop/src/core/constants.py` and restart the client
 (this is a vendor/-territory source edit, not something these docs can do
 for you).
+
+## Fail-closed: what it means when inspection breaks
+
+AC5 requires that secret clipboard content is **never** synced, even when
+the patch can't tell what's on the clipboard. So the concealed/transient
+(macOS) and password-manager-hint (Linux) checks fail **CLOSED**, not open:
+
+- `should_skip_pasteboard_types(None)` and `should_skip_mime_targets(None)`
+  both return `True` (skip) — `None` means "could not inspect", and an
+  unclassifiable item is always treated as sensitive, never as safe.
+- An empty-but-successfully-read list (`[]`) still returns `False` (send) —
+  that's the normal case for ordinary clipboard content once inspection
+  itself is working.
+- Every send additionally re-checks types/targets **after** reading the
+  actual content (not just before), so an item copied in the split-second
+  between the pre-check and the read is still caught by the post-check.
+
+**Symptom of a persistent inspection failure:** the client silently stops
+syncing *all* clipboard content — text, files, and images alike — not just
+secrets. The only signal is the one-time-per-process warning above
+(`clipboard type inspection unavailable -- failing closed, items will NOT
+be synced until this is resolved`); it is logged once and then throttled so
+it doesn't spam `clipcascade_log.log`/`journalctl` on every poll tick. If
+sync has stopped entirely and you find this line, the fix is to repair
+whatever inspection depends on (pyobjc/AppKit on macOS; `gi`/GTK or
+`xclip`/`wl-paste` on Linux — see `docs/setup-ubuntu.md` B1 for the
+packages that provide these) and restart the client. This is a deliberate
+trade-off: sync going dead is safe and loud; sync silently leaking a
+password is not acceptable under any circumstance.
 
 ## Setup fails with `ERROR: expected requirements file not found`
 

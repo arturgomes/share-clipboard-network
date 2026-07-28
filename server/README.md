@@ -36,6 +36,14 @@ This starts the container on port `8080` and creates `./cc_users/` next to
 this file to hold the H2 database (gitignored — do not commit it, it will
 contain user credentials).
 
+Ubuntu Desktop ships with `ufw` **inactive** by default, so port `8080` is
+already reachable on the LAN. If `ufw` is enabled on this host, open the
+port explicitly, or the other client won't be able to reach the server:
+
+```bash
+sudo ufw allow 8080/tcp
+```
+
 Check it's up:
 
 ```bash

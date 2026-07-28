@@ -38,7 +38,18 @@ docker compose logs -f
 ```
 
 This starts the container on port `8080` and creates `server/cc_users/`
-(gitignored) holding the H2 database. `restart: unless-stopped` in
+(gitignored) holding the H2 database.
+
+Ubuntu Desktop ships with `ufw` **inactive** by default, so port `8080` is
+reachable on the LAN out of the box. If you've enabled `ufw` on this
+machine, open the port explicitly or the other client will fail to reach
+the server (AC1):
+
+```bash
+sudo ufw allow 8080/tcp
+```
+
+`restart: unless-stopped` in
 `server/docker-compose.yml` means the container restarts automatically
 whenever the Docker daemon restarts — including after a full desktop
 reboot, since `systemctl enable --now docker` (step A1) makes `docker.service`
