@@ -34,11 +34,16 @@ def test_normal_mime_targets_do_not_skip():
 
 
 def test_empty_list_does_not_skip():
+    # Successfully inspected, nothing sensitive found -- send normally.
     assert should_skip_mime_targets([]) is False
 
 
-def test_none_does_not_skip():
-    assert should_skip_mime_targets(None) is False
+def test_none_fails_closed_and_skips():
+    # AC5 fail-closed semantics: None means "could not inspect" (xclip/
+    # wl-paste/GTK failure, an exception, etc), which must be treated as
+    # sensitive, never as safe-to-send. This is the opposite of the old
+    # fail-open behavior.
+    assert should_skip_mime_targets(None) is True
 
 
 def test_case_variation_does_not_match():
