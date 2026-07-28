@@ -30,6 +30,16 @@ Scope is **text only** (image/file sharing disabled on both clients).
 **Status: working.** Verified in the field on macOS (Apple Silicon) + Ubuntu
 (GNOME/Wayland): both directions, iPhone relay, server auto-start after reboot.
 
+## Versions
+
+ClipCascade confusingly has **two independent version lines** — this bit us
+(`manifest unknown` on pull), so pinned explicitly:
+
+| Component | Version | Source |
+|---|---|---|
+| Desktop clients (both machines) | **3.2.0** | GitHub release tag, vendored in `vendor/ClipCascade_Desktop/` (provenance: `vendor/VERSION`) |
+| Server Docker image | **0.7.0** | Docker Hub `sathvikrao/clipcascade:0.7.0` — the Hub image is versioned `0.x`, NOT `3.x`; `0.7.0` == `latest` digest as of 2026-07-28, multi-arch (amd64/arm64) |
+
 ## Architecture
 
 ```
