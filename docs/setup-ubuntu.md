@@ -22,11 +22,11 @@ If you need a newer Docker/Compose than Ubuntu ships, use Docker's own
 `docker-ce` repo instead: https://docs.docker.com/engine/install/ubuntu/
 (see `server/README.md` for both options).
 
-Before pulling, confirm an image build exists for this host's CPU
-architecture (amd64 vs arm64) at
-https://hub.docker.com/r/sathvikrao/clipcascade/tags — `server/docker-compose.yml`
-pins `sathvikrao/clipcascade:3.2.0` but does not resolve the arch question
-for you.
+`server/docker-compose.yml` pins `sathvikrao/clipcascade:0.7.0` — note the
+Docker Hub image has its own version line (0.x), separate from the GitHub
+release tags (3.x) the desktop clients come from. 0.7.0 is multi-arch
+(amd64/arm64/ppc64le/s390x), so both common desktop architectures are
+covered.
 
 ### A2. Bring the server up
 

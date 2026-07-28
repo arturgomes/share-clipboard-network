@@ -1,14 +1,14 @@
 
 # ClipCascade server — runs on the Ubuntu desktop.
 #
-# Before pulling: check https://hub.docker.com/r/sathvikrao/clipcascade/tags
-# for the correct architecture (amd64/arm64) — the tag below is pinned to
-# 3.2.0 but Docker will pull whichever arch variant matches the host if the
-# image is published as a multi-arch manifest; verify this is actually the
-# case for 3.2.0 before relying on it on non-amd64 hosts.
+# NOTE: the Docker Hub image uses its own version line (0.x), separate from
+# the GitHub release tags (3.x) the desktop clients are vendored from.
+# 0.7.0 is the current server build (same digest as `latest` as of
+# 2026-07-28, multi-arch: amd64/arm64/ppc64le/s390x) and is what the 3.2.0
+# clients pair with. Tags: https://hub.docker.com/r/sathvikrao/clipcascade/tags
 services:
   clipcascade:
-    image: sathvikrao/clipcascade:3.2.0
+    image: sathvikrao/clipcascade:0.7.0
     container_name: clipcascade
     ports:
       - "8080:8080"
