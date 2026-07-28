@@ -1,0 +1,22 @@
+
+# ClipCascade server — runs on the Ubuntu desktop.
+#
+# Before pulling: check https://hub.docker.com/r/sathvikrao/clipcascade/tags
+# for the correct architecture (amd64/arm64) — the tag below is pinned to
+# 3.2.0 but Docker will pull whichever arch variant matches the host if the
+# image is published as a multi-arch manifest; verify this is actually the
+# case for 3.2.0 before relying on it on non-amd64 hosts.
+services:
+  clipcascade:
+    image: sathvikrao/clipcascade:3.2.0
+    container_name: clipcascade
+    ports:
+      - "8080:8080"
+    volumes:
+      # H2 file-based database; persists users/config across container restarts.
+      - ./cc_users:/database
+    environment:
+      # 1 MiB cap on a single clipboard message. Text-only v1 stays well
+      # under this; raise if larger payloads are needed later.
+      CC_MAX_MESSAGE_SIZE_IN_MiB: 1
+    restart: unless-stopped

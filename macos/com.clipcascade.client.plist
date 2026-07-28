@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ClipCascade client LaunchAgent (macOS user agent, not a system daemon).
+
+  ProgramArguments below points at an ABSOLUTE-PATH PLACEHOLDER:
+    /ABSOLUTE/PATH/TO/REPO/macos/run-client.sh
+  launchd does not expand ~ or $HOME in plist values, so this must be a
+  real absolute path to this repo's checkout on the Mac, e.g.
+    /Users/yourname/code/share-clipboard-network/macos/run-client.sh
+  macos/install.sh performs this substitution for you when it copies this
+  file into ~/Library/LaunchAgents/ — see that script for details. If you
+  install this plist by hand instead, edit the path yourself first.
+
+  StandardOutPath / StandardErrorPath below use the same kind of ABSOLUTE
+  PLACEHOLDER (/Users/PLACEHOLDER_USER/...) for the same reason: launchd
+  plists don't expand ~. macos/install.sh substitutes your actual home
+  directory in automatically.
+-->
+
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.clipcascade.client</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/ABSOLUTE/PATH/TO/REPO/macos/run-client.sh</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/PLACEHOLDER_USER/Library/Logs/clipcascade.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/PLACEHOLDER_USER/Library/Logs/clipcascade.log</string>
+</dict>
+</plist>

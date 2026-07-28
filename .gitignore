@@ -1,2 +1,17 @@
 .worktrees/
 .claude/orchestration-state.json
+
+# Python venvs (ClipCascade client runtime, macOS + Linux)
+.venv/
+.venv-mac/
+.venv-linux/
+venv/
+__pycache__/
+*.pyc
+
+# ClipCascade client runtime config + logs (contains derived key material / server IP)
+DATA
+*.log
+
+# ClipCascade server H2 database volume (server/docker-compose.yml mounts this)
+cc_users/

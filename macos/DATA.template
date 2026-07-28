@@ -1,0 +1,13 @@
+{
+  "_comment_": "JSON has no comments, so this file is a TEMPLATE, not a runnable config. Copy it to the real client config path (see below), fill in the placeholder values, and DELETE this _comment_ key before use. Key reference: cipher_enabled = enable client-side E2E encryption (must be true on both machines). server_url = ClipCascade server HTTP URL (SERVER_LAN_IP, never localhost - see server/README.md #5 / upstream issue #129). websocket_url = same server, ws:// scheme, /clipsocket path. username = the non-admin sync user created via the server's /dashboard admin panel (see server/README.md #4). maxsize = max clipboard payload size the client will send/accept, in bytes; keep <= the server's CC_MAX_MESSAGE_SIZE_IN_MiB (1 MiB = 1048576 bytes). hash_rounds and salt = key-derivation parameters for the E2E cipher; MUST be identical on the macOS and Ubuntu clients or they cannot decrypt each other's clipboard updates - pick your own salt, do not ship the placeholder value. enable_image_sharing / enable_file_sharing = false for this project's v1 (text-only scope). server_mode = 'P2S' (client-to-server) topology mode.",
+  "cipher_enabled": true,
+  "server_url": "http://SERVER_LAN_IP:8080",
+  "websocket_url": "ws://SERVER_LAN_IP:8080/clipsocket",
+  "username": "CHANGE_ME_SYNC_USERNAME",
+  "maxsize": 1048576,
+  "hash_rounds": 664937,
+  "salt": "CHANGE_ME_SAME_ON_BOTH",
+  "enable_image_sharing": false,
+  "enable_file_sharing": false,
+  "server_mode": "P2S"
+}

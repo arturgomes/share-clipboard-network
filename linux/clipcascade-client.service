@@ -1,0 +1,35 @@
+# ClipCascade client systemd USER unit (installs to ~/.config/systemd/user/).
+#
+# ExecStart below uses an ABSOLUTE-PATH PLACEHOLDER:
+#   /ABSOLUTE/PATH/TO/REPO
+# systemd user units don't reliably expand ~ or $HOME in ExecStart, so this
+# must be a real absolute path to this repo's checkout on the Ubuntu box,
+# e.g. /home/yourname/code/share-clipboard-network. linux/install.sh
+# substitutes this for you when it copies this file in — if installing by
+# hand, edit the path yourself first.
+#
+# --gui true: GNOME/Wayland defaults to CLI mode; this is required for the
+#   AppIndicator tray icon (needs gnome-shell-extension-appindicator, see
+#   linux/setup.sh).
+# --polling 1: overrides the client's default 3s clipboard poll interval,
+#   which is too slow for the project's ~2s latency budget.
+#
+# WAYLAND_DISPLAY and XDG_RUNTIME_DIR are NOT set here — as a user unit tied
+# to graphical-session.target, this process inherits them from the already-
+# running graphical user session's environment (systemd user managers
+# import these via the session manager / pam_systemd on login). If the
+# service fails to reach the Wayland/X11 clipboard, check that
+# `systemctl --user show-environment` actually has these set.
+[Unit]
+Description=ClipCascade clipboard sync client
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/ABSOLUTE/PATH/TO/REPO/.venv-linux/bin/python3 /ABSOLUTE/PATH/TO/REPO/vendor/ClipCascade_Desktop/src/main.py --gui true --polling 1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
