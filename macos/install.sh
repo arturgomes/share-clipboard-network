@@ -7,6 +7,12 @@
 # - Loads it with launchctl so it starts now and on every login.
 set -euo pipefail
 
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "ERROR: this script is for the macOS machine (detected $(uname -s))." >&2
+  echo "On Linux use the scripts in linux/ instead." >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 

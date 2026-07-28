@@ -7,6 +7,12 @@
 # by this script).
 set -euo pipefail
 
+if [[ "$(uname -s)" != "Linux" ]]; then
+  echo "ERROR: this script is for the Ubuntu/Linux machine (detected $(uname -s))." >&2
+  echo "On macOS use the scripts in macos/ instead." >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
