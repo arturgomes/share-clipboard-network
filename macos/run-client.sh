@@ -44,9 +44,25 @@ if [[ ! -f "${MAIN_PY}" ]]; then
   exit 1
 fi
 
+# Python 3.12 required: pasteboard/pyobjus ship no 3.13+ wheels and their
+# source builds fail under current clang (-Werror cast errors). The client's
+# login window also needs tkinter, which Homebrew packages separately
+# (brew install python-tk@3.12).
+PYTHON_BIN="$(command -v python3.12 || true)"
+if [[ -z "${PYTHON_BIN}" ]]; then
+  echo "ERROR: python3.12 not found. Install it first:" >&2
+  echo "  brew install python@3.12 python-tk@3.12" >&2
+  exit 1
+fi
+if ! "${PYTHON_BIN}" -c 'import tkinter' 2>/dev/null; then
+  echo "ERROR: tkinter missing for python3.12. Install it:" >&2
+  echo "  brew install python-tk@3.12" >&2
+  exit 1
+fi
+
 if [[ ! -d "${VENV_DIR}" ]]; then
   echo "Creating venv at ${VENV_DIR} ..."
-  python3 -m venv "${VENV_DIR}"
+  "${PYTHON_BIN}" -m venv "${VENV_DIR}"
 fi
 
 # shellcheck disable=SC1091

@@ -11,10 +11,12 @@ this client too (`enable_image_sharing` / `enable_file_sharing` in
 
 ## 1. Prerequisites
 
-- `python3` available on `PATH` (`python3 --version`). macOS ships Python 3
-  by default on recent releases; if missing, install via
-  [python.org](https://www.python.org/downloads/macos/) or Homebrew
-  (`brew install python3`).
+- **Python 3.12 specifically**, plus its Tk bindings:
+  `brew install python@3.12 python-tk@3.12`. Newer Pythons (3.13/3.14) do
+  NOT work — `pasteboard`/`pyobjus` ship no wheels for them and their source
+  builds fail under current clang; the login window needs tkinter, which
+  Homebrew packages separately. `macos/run-client.sh` checks both and exits
+  with instructions if missing.
 - No app install needed — the client runs **from the vendored source**
   (`vendor/ClipCascade_Desktop/`) via a venv, which also sidesteps macOS
   Gatekeeper's unsigned-app warning (there's no unsigned `.app` bundle to
