@@ -1,0 +1,12 @@
+component: ClipCascade Desktop client (macOS + Linux + Windows)
+upstream_url: https://github.com/Sathvik-Rao/ClipCascade
+upstream_tag: 3.2.0
+upstream_archive: https://github.com/Sathvik-Rao/ClipCascade/archive/refs/tags/3.2.0.tar.gz
+retrieval_date: 2026-07-27
+subtree_path: ClipCascade_Desktop/ (from repo root, upstream tag 3.2.0)
+vendored_to: vendor/ClipCascade_Desktop/
+license: GPL-3.0 (upstream repo-root LICENSE copied verbatim into vendor/ClipCascade_Desktop/LICENSE)
+notes: >
+  Unmodified upstream tree vendored in its own commit for auditability.
+  Local patches (password-manager/secret clipboard item skip on macOS + Linux)
+  are applied in subsequent commits and mirrored as patches/000*.patch files.
